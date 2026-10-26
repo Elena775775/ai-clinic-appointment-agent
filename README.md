@@ -50,6 +50,11 @@ The workflows were tested using fictional project data, including appointment bo
 
 The reporting workflow uses predefined assumptions for monthly scheduled hours, workload utilization, idle time, and bonus thresholds. These are demonstration rules for this project and are not intended as universal payroll or healthcare standards.
 
+## Demo Data
+
+[Open Google Sheets — Clinic CRM (Doctors & Appointments)](https://docs.google.com/spreadsheets/d/1a5lMlQXvNnh3mrvA1fmELKRu8HKQnnbQiPDvGsU-7Qo/edit?usp=sharing)
+
+The spreadsheet contains the demo data used by the appointment booking and reporting workflows.
 ## Project Files
 
 - `README.md` — project overview and documentation
