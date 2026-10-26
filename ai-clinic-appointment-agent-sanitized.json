@@ -1,0 +1,721 @@
+{
+  "name": "AI Clinic Appointment and Reporting Agent (Portfolio Template)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "id": "8c08e147-ef03-405e-a611-81112e4bdca2",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.5,
+      "position": [
+        -608,
+        -176
+      ],
+      "webhookId": "REPLACE_WITH_NEW_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "=Role: You are a consultation agent at the “Snow Therapy” mental health clinic.\nTask: Provide clients with information about the clinic, advise clients before they schedule an appointment with a specific doctor, assign a doctor, and schedule appointments.\nToday's date: {{ $now.toFormat('dd.MM.yyyy') }}\nAvailable work scenarios:\n1. “Consultation on Clinic Matters”\nIn this scenario, your task is to provide only the information about the clinic available in your prompt, including location and contact details. You should also provide all necessary information about doctors or consultations regarding the client’s issues and how they align with our doctors’ specializations, which you can obtain using the “Doctors (get all)” tool.\n2. “Scheduling a Client Appointment”\nWhen a client wants to schedule an appointment, you must follow a clear step-by-step process using your tools:\n1) Greet the client, provide a brief summary of information about yourself and the clinic (if this is the first message in the conversation), and find out what the client’s request is\n2) After receiving the request, check whether there is a doctor whose specialty allows them to address the client’s issue\nIF there is a doctor with the appropriate specialization—proceed to step 3\nIF there is no doctor with the appropriate specialization—ask the client to provide more details about their complaint to determine the appropriate specialist, or ask them to provide a clear diagnosis with a referral from their primary care physician\n3) Ask the client which date they would like to schedule an appointment for (ask them to specify the date in the format “day.month” if the client has not yet provided this information)\n4) Check the “Appointments” table for the specified date for this doctor using their Telegram ID\n5) Provide the client with a structured list of available appointment times. Specify that the appointment lasts one hour and that the client must select an appointment time from those available on that day, if the client has not yet provided this information\n6) After selecting an appointment time, which must be in the format “xx:00” or simply “xx,” do the following:\nSend a confirmation form containing “First and last name, appointment date, appointment time, doctor, and issue.”\n7) After the client confirms, enter the appointment into the “Appointments” database using the current data provided by the client and the data retrieved from the doctors’ table.\n8) Notify the doctors about the appointment in the chat by tagging the relevant doctor’s Telegram username under this message in the chat using the “Notify doctors” tool.\n9) Once the doctors have been notified, send a message to the patient confirming the successful appointment using the “Reply to client” tool.\nRestrictions:\n- Do not invent information that is not included in the prompt\n- Do not provide advice outside the scope of your role\n- Do not deviate from the sequence of actions\nKey requirements:\n1. Always use the “Reply to client” tool to send your generated response to the client. For all your responses\n2. Always follow the provided scenarios\n3. Always send text in Plain Text format without additional formatting, but structured with logical line breaks\nClinic Information:\nReception number: [DEMO PHONE — replace before use]\nAddress: [DEMO ADDRESS — replace before use]\nWebsite: [DEMO WEBSITE — verify/replace before use]\nHours: 8 a.m. to 5 p.m. every day (including weekends)\nA clinic providing initial psychological assistance and a wide range of psychological therapies\nAlways reply in the same language as the client's message\nAvailable tools:\n1. Doctors (get all) — retrieve a list of all doctors at the clinic\n2. Notify doctors — send a notification to doctors in the group\n3. Reply to client – reply to a client\n4. Records (schedule) – create a new appointment with a doctor\n5. Records (get for doctor) – get a list of appointments with the selected doctor for a specific date\n\n"
+        }
+      },
+      "id": "b5e6c34d-9fd2-4176-95f7-bc33d3a9efaa",
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -16,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {}
+      },
+      "id": "fdf0490c-db9e-43ea-8340-0f1105e2d42a",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -608,
+        -384
+      ]
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "= {{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "contextWindowLength": 15
+      },
+      "id": "6a1c7c97-7721-461e-af2e-f08246dc96fb",
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        -80,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Надсилати відповіді в Телеграм чат до клієнта",
+        "chatId": "={{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "text": "={{ $fromAI('Text_to_client', `Відповідь для клієнта в телеграм`, 'string') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "2744cabe-3107-4a24-8d9f-cef8e02076e0",
+      "name": "Reply to client",
+      "type": "n8n-nodes-base.telegramTool",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        112
+      ],
+      "webhookId": "REPLACE_WITH_NEW_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "отримати інформіцію про лікарів",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_CLINIC_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 15674767,
+          "mode": "list",
+          "cachedResultName": "Лікарі",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "options": {}
+      },
+      "id": "4cb200fe-9db4-45e7-87c5-5dcd1dc50e55",
+      "name": "Doctors (get all)",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        64,
+        160
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Створити новий запис на прийом до лікаря\n",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_CLINIC_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1192033099,
+          "mode": "list",
+          "cachedResultName": "Записи",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "TG ID пацієнта": "={{ $('Telegram Trigger').first().json.message.from.id }}",
+            "Ім'я пацієнта": "={{ $fromAI('client_name', `ім'я пацієнта, який записується на прийом`, 'string') }}",
+            "Прізвище пацієнта": "={{ $fromAI('client_surname', `прізвище пацієнта, який записується на прийом`, 'string') }}",
+            "Ім'я лікаря": "={{ $fromAI('doctor_name', `імя лікаря, до якого записується на прийом`, 'string') }}",
+            "Прізвище лікаря": "={{ $fromAI('doctor_surnane', `прізвище лікаря, до якого записується на прийом`, 'string') }}",
+            "TG ID лікаря": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('TG_ID_______', `TG ID лікаря, до якого записується на прийом (числове значення)`, 'string') }}",
+            "Причина звернення": "={{ $fromAI('client_problem', `проблема, з якою звернувся клієнт для запису`, 'string') }}",
+            "Дата запису": "={{ $fromAI('schedule_date', `дата, на яку хоче записатись клієнт у формі dd.MM.yyyy`, 'string') }}",
+            "Час запису": "={{ $fromAI('schedule_time', `час, на який хоче записатись клієнт у форматі \"XX:00\"`, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Ім'я пацієнта",
+              "displayName": "Ім'я пацієнта",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Прізвище пацієнта",
+              "displayName": "Прізвище пацієнта",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TG ID пацієнта",
+              "displayName": "TG ID пацієнта",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Ім'я лікаря",
+              "displayName": "Ім'я лікаря",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Прізвище лікаря",
+              "displayName": "Прізвище лікаря",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "TG ID лікаря",
+              "displayName": "TG ID лікаря",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Причина звернення",
+              "displayName": "Причина звернення",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Дата запису",
+              "displayName": "Дата запису",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Час запису",
+              "displayName": "Час запису",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "id": "cc38854c-9bec-4058-b90b-1aeb889639a3",
+      "name": "Records (schedule)",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        144,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "отримати записи до лікаря на цей день",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_CLINIC_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1192033099,
+          "mode": "list",
+          "cachedResultName": "Записи",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "TG ID лікаря",
+              "lookupValue": "={{ $fromAI('TG_ID_doctor', `TG ID лікаря до якого записуються на прийом (числове значення)`, 'string') }}"
+            },
+            {
+              "lookupColumn": "=Дата запису",
+              "lookupValue": "={{ $fromAI('schedule_date', `дата на яку бажає записатись клієнт у форматі dd.MM.yyyy`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c8ce0809-4f83-4817-80db-48ddb904fb2c",
+      "name": "Records (get for doctor)",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        464,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "повістити лікарів в групу про запис",
+        "chatId": "REPLACE_WITH_YOUR_TELEGRAM_GROUP_CHAT_ID",
+        "text": "={{ $fromAI('Notify_text', `Сповіщення до лікаря про запис до нього. Використовуй етлеграм тег (@name) для того щоб тегати відповідного лікаря під сповіщенням`, 'string') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "6c659b1f-3f9c-4337-95c2-630e36efa20a",
+      "name": "Notify doctors",
+      "type": "n8n-nodes-base.telegramTool",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        240
+      ],
+      "webhookId": "REPLACE_WITH_NEW_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -192,
+        96
+      ],
+      "id": "7504f1c1-7148-455a-a95f-b1e060f1bbfd",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "16670f38-3d01-4f7d-8a84-3d34b330511b",
+              "leftValue": "={{ $json.message.from.id }}",
+              "rightValue": "REPLACE_WITH_DIRECTOR_TELEGRAM_USER_ID",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -384,
+        -176
+      ],
+      "id": "88967750-6a03-4a19-bc62-cdd6818b4999",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -384
+      ],
+      "id": "4a6c316d-a5d4-4727-8766-34bccb2b7acf",
+      "name": "Groq Chat Model1"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=111111{{ $('Telegram Trigger').first().json.message.chat.id }}",
+        "contextWindowLength": 15
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        16,
+        -288
+      ],
+      "id": "bd8ec079-6565-4062-a9c2-3b7c136949c3",
+      "name": "Simple Memory1"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Отримати всю інформацію про лікарів\n",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_CLINIC_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 15674767,
+          "mode": "list",
+          "cachedResultName": "Лікарі",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        272,
+        -240
+      ],
+      "id": "c904cb9b-7157-4d7c-9480-aeda7ca4c385",
+      "name": "Get_all_doctors"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Отримати всі записи до лікаря",
+        "documentId": {
+          "__rl": true,
+          "value": "REPLACE_WITH_YOUR_GOOGLE_SHEET_ID",
+          "mode": "list",
+          "cachedResultName": "YOUR_CLINIC_SHEET",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1192033099,
+          "mode": "list",
+          "cachedResultName": "Записи",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/REPLACE_WITH_YOUR_GOOGLE_SHEET_ID/edit"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "TG ID лікаря",
+              "lookupValue": "={{ $fromAI('doctors_TG_ID', `TG ID лікаря про якого Джон хоче отримати звіт`, 'string') }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "typeVersion": 4.7,
+      "position": [
+        112,
+        -256
+      ],
+      "id": "a6a4f7a3-c7c6-4238-851f-3cc11dabf7bd",
+      "name": "Load_doctor_appointments1"
+    },
+    {
+      "parameters": {
+        "description": "Call this tool to calculate all metrics for a doctor",
+        "jsCode": "const { work_hours, monthly_salary, appointment_dates } = query;\n \nfunction toNumber(value) {\n  if (typeof value === 'number') return value;\n  const cleaned = String(value ?? '').replace(/[^\\d.]/g, '');\n  return parseFloat(cleaned) || 0;\n}\n \nfunction parseDailyHours(str) {\n  const match = String(str).match(/(\\d{1,2}):(\\d{2})\\s*-\\s*(\\d{1,2}):(\\d{2})/);\n  if (!match) {\n    throw new Error('Не вдалося розпізнати графік роботи (work_hours): \"' + str + '\"');\n  }\n  const startH = parseInt(match[1], 10) + parseInt(match[2], 10) / 60;\n  const endH = parseInt(match[3], 10) + parseInt(match[4], 10) / 60;\n  return endH - startH;\n}\n \nconst salary = toNumber(monthly_salary);\nconst dailyHours = parseDailyHours(work_hours);\n \n// Бізнес-правило клініки: робочі години на місяць = години на день * 15\nconst scheduledMonthlyHours = dailyHours * 15;\n \n// Поточний місяць визначається самим кодом (реальна дата виконання), а не вигадується моделлю\nconst now = new Date();\nconst currentMonthStr = String(now.getMonth() + 1).padStart(2, '0') + '.' + now.getFullYear();\n \n// 1 запис у поточному місяці = 1 відпрацьована година\nconst datesThisMonth = (Array.isArray(appointment_dates) ? appointment_dates : []).filter((d) => {\n  const parts = String(d).trim().split('.');\n  if (parts.length !== 3) return false;\n  return parts[1] + '.' + parts[2] === currentMonthStr;\n});\n \nconst workedHours = datesThisMonth.length;\nconst idleHours = Math.max(scheduledMonthlyHours - workedHours, 0);\nconst utilizationPercent = scheduledMonthlyHours > 0 ? (workedHours / scheduledMonthlyHours) * 100 : 0;\nconst idlePercent = scheduledMonthlyHours > 0 ? (idleHours / scheduledMonthlyHours) * 100 : 0;\n \nlet bonusUsd = 0;\nif (utilizationPercent > 80) bonusUsd = 200;\nelse if (utilizationPercent > 60) bonusUsd = 100;\n \nconst realHourlyCost = workedHours > 0 ? salary / workedHours : null;\nconst needsScheduleReview = idlePercent > 40;\n \nconst round2 = (n) => Math.round(n * 100) / 100;\n \nconst result = {\n  current_month: currentMonthStr,\n  scheduled_monthly_hours: round2(scheduledMonthlyHours),\n  worked_hours: workedHours,\n  utilization_percent: round2(utilizationPercent),\n  bonus_usd: bonusUsd,\n  idle_hours: round2(idleHours),\n  idle_percent: round2(idlePercent),\n  needs_schedule_review: needsScheduleReview,\n  monthly_salary: salary,\n  real_hourly_cost: realHourlyCost !== null ? round2(realHourlyCost) : null\n};\n \nreturn JSON.stringify(result);\n",
+        "specifyInputSchema": true,
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"work_hours\": {\n      \"type\": \"string\",\n      \"description\": \"Графік лікаря з поля \\\"Години прийому\\\" інструменту Get_all_doctors. Формат: \\\"09:00 - 15:00\\\"\"\n    },\n    \"monthly_salary\": {\n      \"type\": \"number\",\n      \"description\": \"ЗП лікаря з поля \\\"Місячна ЗП ($)\\\" інструменту Get_all_doctors. Лише число, без $ і пробілів\"\n    },\n    \"appointment_dates\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" },\n      \"description\": \"Усі дати з поля \\\"Дата запису\\\" інструменту Load_doctor_appointments для цього лікаря, формат dd.MM.yyyy. Передавай БЕЗ фільтрації за місяцем\"\n    }\n  },\n  \"required\": [\"work_hours\", \"monthly_salary\", \"appointment_dates\"]\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolCode",
+      "typeVersion": 1.3,
+      "position": [
+        416,
+        -272
+      ],
+      "id": "5a39bd78-aeab-4146-84c6-f713ea2a4b0a",
+      "name": "Calculate_report_metrics"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Надіслати звіт Джону в телеграм",
+        "chatId": "REPLACE_WITH_DIRECTOR_TELEGRAM_CHAT_ID",
+        "text": "={{ $fromAI('Report_to_John', `Структурований звіт для Джона`, 'string') }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegramTool",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        -400
+      ],
+      "id": "dccfcdec-313b-4413-bf03-ae0e3f807f2d",
+      "name": " Reply_to_John",
+      "webhookId": "REPLACE_WITH_NEW_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "=Role: Reporting assistant for \"Snow Therapy\" clinic.\n\nFORBIDDEN: Calculate numbers manually. Only use Calculate_report_metrics.\n\nToday's day and month: {{ $now.format('dd.MM.yyyy') }} (in format dd.MM.yyyy)\nTools:\n\nGet_all_doctors — get schedule field (\"Години прийому\") + salary field (\"Місячна ЗП ($)\")\nLoad_doctor_appointments — get all dates from field \"Дата запису\"\nCalculate_report_metrics — call after Get_all_doctors + Load_doctor_appointments\n\nHow to fill Input:\nwork_hours ← \"Години прийому\" from Get_all_doctors (e.g. \"09:00 - 15:00\")\nmonthly_salary ← \"Місячна ЗП ($)\" from Get_all_doctors (number only, e.g. 900)\nappointment_dates ← array of ALL dates from Load_doctor_appointments, \nfield \"Дата запису\", format dd.MM.yyyy (e.g. [\"01.07.2026\", \"03.07.2026\"]) \nOutput: \nscheduled_monthly_hours, \nworked_hours, \nutilization_percent, \nbonus_usd, \nidle_hours, \nidle_percent, \nneeds_schedule_review,\nreal_hourly_cost\n\n\nReply_to_John — send report\n\nScenario 1: Utilization + Bonus → Get_all_doctors + Load_doctor_appointments → Calculate_report_metrics → Reply_to_John:\n\nScheduled hours (month): scheduled_monthly_hours\nHours worked: worked_hours\nUtilization: utilization_percent%\nBonus: bonus_usd$\n\nScenario 2: Idle Time Analysis → Get_all_doctors + Load_doctor_appointments → Calculate_report_metrics → Reply_to_John:\n\nScheduled hours (month): scheduled_monthly_hours\nIdle hours: idle_hours\nIdle %: idle_percent%\nConclusion: needs_schedule_review → schedule adjustment needed/not needed\n\nScenario 3: Real Hourly Cost → Get_all_doctors + Load_doctor_appointments → Calculate_report_metrics → Reply_to_John:\n\nDoctor salary: monthly_salary$\nReal hours with patients: worked_hours\nCost per hour: real_hourly_cost$\nIMPORTANT: For EVERY user message (including questions that don't match any scenario above), you MUST send your final answer to John using the Reply_to_John tool. Never finish without calling Reply_to_John. Reply in the same language as the user's message."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        32,
+        -480
+      ],
+      "id": "b74302ed-9995-45ff-b652-4abfe26c1294",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -96,
+        -256
+      ],
+      "id": "e1d13aca-882f-486c-a5ab-c24519ab31af",
+      "name": "OpenAI Chat Model1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply to client": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Doctors (get all)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Records (schedule)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Records (get for doctor)": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify doctors": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Simple Memory1": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get_all_doctors": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load_doctor_appointments1": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate_report_metrics": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    " Reply_to_John": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "tags": []
+}
